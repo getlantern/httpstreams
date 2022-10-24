@@ -203,7 +203,7 @@ func (l *listener) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("proto is %s", r.TLS.NegotiatedProtocol)
 
 	atomic.AddInt64(&l.numConnections, 1)
-	conn, err := newServerConn(w, r)
+	conn, err := newServerConn(w, r, l.Addr())
 	if err != nil {
 		log.Errorf("Failed to upgrade h2 connection: %w", err)
 		return
@@ -230,11 +230,16 @@ func (l *listener) logStats() {
 	}
 }
 
-func newServerConn(w http.ResponseWriter, r *http.Request) (*serverConn, error) {
+func newServerConn(w http.ResponseWriter, r *http.Request, localAddr net.Addr) (*serverConn, error) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		return nil, fmt.Errorf("http.ResponseWriter did not support flush")
+	}
+
+	remoteAddr, err := net.ResolveTCPAddr("tcp", r.RemoteAddr)
+	if err != nil {
+		return nil, err
 	}
 
 	return &serverConn{
@@ -242,6 +247,8 @@ func newServerConn(w http.ResponseWriter, r *http.Request) (*serverConn, error) 
 		writeFlush:   flusher,
 		request:      r,
 		closedSignal: make(chan struct{}),
+		localAddr:    localAddr,
+		remoteAddr:   remoteAddr,
 	}, nil
 }
 
@@ -252,6 +259,8 @@ type serverConn struct {
 	closedSignal chan struct{}
 	closeOnce    sync.Once
 	closeErr     error
+	localAddr    net.Addr
+	remoteAddr   net.Addr
 }
 
 func (c *serverConn) waitForClose() {
@@ -282,14 +291,12 @@ func (c *serverConn) Close() error {
 
 // implements net.Conn.LocalAddr
 func (c *serverConn) LocalAddr() net.Addr {
-	// not currently supported
-	return nil
+	return c.localAddr
 }
 
 // implements net.Conn.RemoteAddr
 func (c *serverConn) RemoteAddr() net.Addr {
-	// not currently supported
-	return nil
+	return c.remoteAddr
 }
 
 func (c *serverConn) SetDeadline(t time.Time) error {
