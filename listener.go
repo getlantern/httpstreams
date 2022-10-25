@@ -196,16 +196,10 @@ func (l *listener) isClosed() bool {
 }
 
 func (l *listener) handleUpgrade(w http.ResponseWriter, r *http.Request) {
-	log.Debugf("handling an upgrade ...\n")
-
-	// check method ... other things?
-	log.Debugf("method is %s", r.Method)
-	log.Debugf("proto is %s", r.TLS.NegotiatedProtocol)
-
 	atomic.AddInt64(&l.numConnections, 1)
 	conn, err := newServerConn(w, r, l.Addr())
 	if err != nil {
-		log.Errorf("Failed to upgrade h2 connection: %w", err)
+		log.Errorf("Failed to upgrade a aconnection: %w", err)
 		return
 	}
 
